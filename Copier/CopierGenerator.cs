@@ -136,9 +136,8 @@ namespace Copier
 
         private void GenerateCopier(SourceProductionContext context, ImmutableArray<CopyObject?> copyObjects)
         {
-            // TODO: Make sure that we are only making methods for distinct types
+            // Make sure that we are only making a single method even if there are multiple calls
             var distinctCopyObjects = copyObjects.Distinct();
-            //var distinctCopyObjects = copyObjects;
 
             // Parse all of the constraints to get all of the properties to copy
             var copyMethods = new List<CopyMethod>();

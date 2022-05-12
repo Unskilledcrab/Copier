@@ -7,6 +7,8 @@ Copier.Copy<IRunnable>(new Rabit { JumpHeight = 2 }, test2);
 Copier.Copy<ITester>(test1, test2);
 Copier.Copy<ITester>(test1, test2);
 
+Copier.Copy<Rabit>(test1);
+
 public class Kangaroo : IJumpable, IRunnable
 {
     public int JumpHeight { get; set; }
