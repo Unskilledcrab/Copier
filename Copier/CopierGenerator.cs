@@ -25,7 +25,7 @@ namespace Copier
         {
             var copierTypes = context.SyntaxProvider
                         .CreateSyntaxProvider(CouldBeCopierAsync, GetCopierTypeOrNull)
-                        .Where(type => type is not null)
+                        .Where(type => type is not null)                 
                         .Collect();
 
             context.RegisterSourceOutput(copierTypes, GenerateCopier);
@@ -130,15 +130,15 @@ namespace Copier
 
             //}
 
-            potentialCopy.Id = idBuilder.ToString();
+            //potentialCopy.Id = idBuilder.ToString();
             return potentialCopy;
         }
 
         private void GenerateCopier(SourceProductionContext context, ImmutableArray<CopyObject?> copyObjects)
         {
             // TODO: Make sure that we are only making methods for distinct types
-            //var distinctCopyObjects = copyObjects.Distinct(new CopyObjectComparer());
-            var distinctCopyObjects = copyObjects;
+            var distinctCopyObjects = copyObjects.Distinct();
+            //var distinctCopyObjects = copyObjects;
 
             // Parse all of the constraints to get all of the properties to copy
             var copyMethods = new List<CopyMethod>();
@@ -158,7 +158,7 @@ namespace Copier
             }
             sourceText.Append(closeText);
 
-            context.AddSource($"{_className}.g.cs", SourceText.From(sourceText.ToString(), Encoding.UTF8));
+            context.AddSource($"{_className}.g.cs", sourceText.ToString());
         }
 
         private static void ParseGenerics(CopyObject? copyObject, CopyMethod copyMethod)
@@ -254,16 +254,13 @@ namespace Copier
         CopyOver,
     }
 
-    public sealed class CopyMethod
+    public sealed class CopyMethod : IEqualityComparer<CopyObject>
     {
         public CopyType Type { get; set; } = CopyType.New;
         public List<string> PropertyNames { get; set; } = new();
         public string SourceType { get; set; } = "";
-        public string Constraint { get; set; } = "";
-    }
-
-    public sealed class CopyObjectComparer : IEqualityComparer<CopyObject>
-    {
+        public string Constraint { get; set; } = ""; 
+        
         public bool Equals(CopyObject x, CopyObject y)
         {
             return string.Equals(x.Id, y.Id);
