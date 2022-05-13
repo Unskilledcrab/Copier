@@ -8,6 +8,22 @@ using System.Text;
 
 namespace Copier
 {
+    public static class CopierDiagnostic
+    {
+        public static Diagnostic WrongConstraints(InvocationExpressionSyntax syntaxNode)
+        {
+            var descriptor = new DiagnosticDescriptor(
+            id: "COPIER01",
+            title: "A test diagnostic",
+            messageFormat: "A description about the problem",
+            category: "Constraints",
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+            return Diagnostic.Create(descriptor, syntaxNode.GetLocation());
+        }
+    }
+
     [Generator]
     public class CopierGenerator : IIncrementalGenerator
     {
@@ -15,7 +31,7 @@ namespace Copier
         private readonly static string _methodName = "Copy";
         string openText = $@"namespace System
 {{
-    public static partial class {_className}
+    public partial class {_className}
     {{";
         string closeText = $@"    }}
 }}
@@ -25,7 +41,7 @@ namespace Copier
         {
             var copierTypes = context.SyntaxProvider
                         .CreateSyntaxProvider(CouldBeCopierAsync, GetCopierTypeOrNull)
-                        .Where(type => type is not null)                 
+                        .Where(type => type is not null)
                         .Collect();
 
             context.RegisterSourceOutput(copierTypes, GenerateCopier);
@@ -78,7 +94,6 @@ namespace Copier
 
             // Gather all of the information we need to generate the methods for these objects and put them into a containing object
             var potentialCopy = new CopyObject();
-            var idBuilder = new StringBuilder();
 
             // Gather all of the generics in the method
             var accessExpression = expressionSyntax.DescendantNodes().OfType<MemberAccessExpressionSyntax>().First();
@@ -96,7 +111,6 @@ namespace Copier
                     return null;
                 }
                 potentialCopy.Constraint = typeInfo;
-                potentialCopy.Id = (typeInfo.Type?.Name);
             }
 
             // Gather all the argument types used
@@ -130,7 +144,6 @@ namespace Copier
 
             //}
 
-            //potentialCopy.Id = idBuilder.ToString();
             return potentialCopy;
         }
 
@@ -197,8 +210,8 @@ namespace Copier
             // get all of the properties to map
             foreach (var property in constraintType.GetMembers()
                                                                 .OfType<IPropertySymbol>()
-                                                                .Where(p => p.SetMethod is not null 
-                                                                    && p.GetMethod is not null 
+                                                                .Where(p => p.SetMethod is not null
+                                                                    && p.GetMethod is not null
                                                                     && p.DeclaredAccessibility == Accessibility.Public))
             {
                 copyMethod.PropertyNames.Add(property.Name);
@@ -253,28 +266,41 @@ namespace Copier
         CopyOver,
     }
 
-    public sealed class CopyMethod : IEqualityComparer<CopyObject>
+    public sealed class CopyMethod
     {
         public CopyType Type { get; set; } = CopyType.New;
         public List<string> PropertyNames { get; set; } = new();
         public string SourceType { get; set; } = "";
-        public string Constraint { get; set; } = ""; 
-        
-        public bool Equals(CopyObject x, CopyObject y)
-        {
-            return string.Equals(x.Id, y.Id);
-        }
+        public string Constraint { get; set; } = "";
 
-        public int GetHashCode(CopyObject obj)
-        {
-            return obj.Id?.GetHashCode() ?? 0;
-        }
     }
 
-    public sealed class CopyObject
+    public sealed class CopyObject : IEquatable<CopyObject>
     {
-        public string? Id { get; set; } = null;
         public TypeInfo Constraint { get; set; }
         public TypeInfo?[] Arguments { get; set; } = new TypeInfo?[2];
+        
+        public bool Equals(CopyObject other)
+        {
+            //Check whether the compared object is null.
+            if (Object.ReferenceEquals(other, null)) return false;
+
+            //Check whether the compared object references the same data.
+            if (Object.ReferenceEquals(this, other)) return true;
+
+            //Check whether the CopyObject properties are equal.
+            return
+                string.Equals(Constraint.Type?.Name, other.Constraint.Type?.Name) &&
+                string.Equals(Arguments[0].GetValueOrDefault().Type?.Name, other.Arguments[0].GetValueOrDefault().Type?.Name) &&
+                string.Equals(Arguments[1].GetValueOrDefault().Type?.Name, other.Arguments[1].GetValueOrDefault().Type?.Name);
+        }
+
+        public override int GetHashCode()
+        {
+            var constraint = Constraint.Type?.Name?.GetHashCode() ?? 0;
+            var arg1 = Arguments[0].GetValueOrDefault().Type?.Name.GetHashCode() ?? 0;
+            var arg2 = Arguments[1].GetValueOrDefault().Type?.Name.GetHashCode() ?? 0;
+            return constraint ^ arg1 ^ arg2;
+        }
     }
 }

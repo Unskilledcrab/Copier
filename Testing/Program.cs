@@ -3,11 +3,11 @@ var test2 = new Kangaroo { JumpHeight = 2 };
 
 Copier.Copy<IJumpable>(test1, test2);
 Copier.Copy<IRunnable>(new Rabit { JumpHeight = 2 }, test2);
+Copier.Copy<IRunnable>(new Rabit { JumpHeight = 2 }, test2);
+Copier.Copy<IRunnable>(new Rabit { JumpHeight = 2 }, test2);
  
-Copier.Copy<ITester>(test1, test2);
-Copier.Copy<ITester>(test1, test2);
-
 Copier.Copy<Rabit>(test1);
+Copier.Copy<Kangaroo>(test2);
 
 public class Kangaroo : IJumpable, IRunnable
 {
