@@ -233,16 +233,17 @@ namespace Copier
             {
                 if (property.Type.IsReferenceType)
                 {
-                    // Recursively call generate copier so that the reference is added
+                    copyMethod.ReferencePropertyNames.Add((property.Name, property.Type.Name));
+
+                    // Recursively call generate copier so that the reference copier is added
                     var propertyCopyObject = new CopyObject();
                     propertyCopyObject.Constraint = property.Type;
                     propertyCopyObject.Arguments[0] = property.Type;
                     GenerateCopier(context, propertyCopyObject);
-                    copyMethod.ReferencePropertyNames.Add((property.Name, property.Type.Name));
                 }
                 else if (property.Type.IsValueType)
                 {
-                    copyMethod.PropertyNames.Add(property.Name);
+                    copyMethod.ValuePropertyNames.Add(property.Name);
                 }
             }
             return copyMethod;
@@ -277,20 +278,20 @@ namespace Copier
 
         private static string GetCopyNewMethod(CopyMethod copyMethod)
         {
-            var containsSelfReference = ContainsSelfRefernce(copyMethod);
-            return $@"        public static {copyMethod.Constraint} {_methodName}<TConstraint>({copyMethod.SourceType} source{(containsSelfReference ? ", int copyDepth = 10" : "")}) where TConstraint : {copyMethod.Constraint}, new()
+            return $@"        public static {copyMethod.Constraint} {_methodName}<TConstraint>({copyMethod.SourceType} source) where TConstraint : {copyMethod.Constraint}, new()
         {{
+            if (source == null) return source;
             var target = new {copyMethod.Constraint}();
             {GetPropertyMappings(copyMethod)}
             {GetReferencePropertyMappings(copyMethod)}
-            {(containsSelfReference ? GetSelfReferencePropertyMappings(copyMethod) : "")}
+            {GetSelfReferencePropertyMappings(copyMethod)}
             return target;
         }}";
         }
 
         private static string GetPropertyMappings(CopyMethod copyMethod)
         {
-            return string.Join($"{Environment.NewLine}            ", copyMethod.PropertyNames.Select(p => $"target.{p} = source.{p};"));
+            return string.Join($"{Environment.NewLine}            ", copyMethod.ValuePropertyNames.Select(p => $"target.{p} = source.{p};"));
         }
 
         private static string GetReferencePropertyMappings(CopyMethod copyMethod)
@@ -300,12 +301,7 @@ namespace Copier
 
         private static string GetSelfReferencePropertyMappings(CopyMethod copyMethod)
         {
-            return string.Join($"{Environment.NewLine}            ", copyMethod.ReferencePropertyNames.Where(r => r.type == copyMethod.SourceType).Select(p => $"if (!ReferenceEquals(source.{p.propertyName}, null) && copyDepth > 0) target.{p.propertyName} = {_className}.{_methodName}<{p.type}>(source.{p.propertyName}, copyDepth - 1);"));
-        }
-
-        private static bool ContainsSelfRefernce(CopyMethod copyMethod)
-        {
-            return copyMethod.ReferencePropertyNames.Any(r => r.type == copyMethod.SourceType);
+            return string.Join($"{Environment.NewLine}            ", copyMethod.ReferencePropertyNames.Where(r => r.type == copyMethod.SourceType).Select(p => $"if (!ReferenceEquals(source.{p.propertyName}, null) && !ReferenceEquals(source.{p.propertyName}, source)) {{ target.{p.propertyName} = {_className}.{_methodName}<{p.type}>(source.{p.propertyName}); }} else {{ target.{p.propertyName} = source.{p.propertyName}; }}"));
         }
     }
 
@@ -318,7 +314,7 @@ namespace Copier
     public sealed class CopyMethod
     {
         public CopyType Type { get; set; } = CopyType.New;
-        public List<string> PropertyNames { get; set; } = new();
+        public List<string> ValuePropertyNames { get; set; } = new();
         public List<(string propertyName, string type)> ReferencePropertyNames { get; set; } = new();
         public string SourceType { get; set; } = "";
         public string Constraint { get; set; } = "";
