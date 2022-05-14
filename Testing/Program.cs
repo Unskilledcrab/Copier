@@ -5,6 +5,19 @@ Copier.Copy<IRunnable>(test1, test2);
 Copier.Copy<IRunnable>(test1, test2);
 Copier.Copy<Kangaroo>(test2);
 
+Copier.Copy<Pikachu>(new Pikachu());
+
+public class Pikachu
+{
+    public string Name { get; set; }
+    public bool boolean { get; set; }
+    public uint UniversalInt { get; set; }
+
+    public void test (HashSet<int> visited = null)
+    {
+
+    }
+}
 
 public class Rabit : IJumpable
 {

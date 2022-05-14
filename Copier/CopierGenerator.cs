@@ -231,7 +231,7 @@ namespace Copier
                                                                     && p.GetMethod is not null
                                                                     && p.DeclaredAccessibility == Accessibility.Public))
             {
-                if (property.Type.IsReferenceType)
+                if (property.Type.IsReferenceType && property.Type.Name != "String")
                 {
                     copyMethod.ReferencePropertyNames.Add((property.Name, property.Type.Name));
 
@@ -241,7 +241,7 @@ namespace Copier
                     propertyCopyObject.Arguments[0] = property.Type;
                     GenerateCopier(context, propertyCopyObject);
                 }
-                else if (property.Type.IsValueType)
+                else if (property.Type.IsValueType || property.Type.Name == "String")
                 {
                     copyMethod.ValuePropertyNames.Add(property.Name);
                 }
@@ -271,8 +271,7 @@ namespace Copier
         {
             return $@"        public static void {_methodName}<TConstraint>({copyMethod.Constraint} source, {copyMethod.Constraint} target) where TConstraint : {copyMethod.Constraint}
         {{
-            {GetPropertyMappings(copyMethod)}
-            {GetReferencePropertyMappings(copyMethod)}
+            {GetPropertyMappings(copyMethod)}{GetReferencePropertyMappings(copyMethod)}
         }}";
         }
 
@@ -282,9 +281,7 @@ namespace Copier
         {{
             if (source == null) return source;
             var target = new {copyMethod.Constraint}();
-            {GetPropertyMappings(copyMethod)}
-            {GetReferencePropertyMappings(copyMethod)}
-            {GetSelfReferencePropertyMappings(copyMethod)}
+            {GetPropertyMappings(copyMethod)}{GetReferencePropertyMappings(copyMethod)}{GetSelfReferencePropertyMappings(copyMethod)}
             return target;
         }}";
         }
