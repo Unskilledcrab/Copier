@@ -44,10 +44,18 @@ namespace Copier
             var copierTypes = context.SyntaxProvider
                         .CreateSyntaxProvider(CouldBeCopierAsync, GetCopierTypeOrNull)
                         .Where(type => type is not null)
-                        .Collect()
-                        .SelectMany((x, _) => x.Distinct());
+                        .Collect();
 
             context.RegisterSourceOutput(copierTypes, GenerateCopier);
+        }
+
+        private void GenerateCopier(SourceProductionContext arg1, ImmutableArray<CopyObject> arg2)
+        {
+            _referenceProperties.Clear();
+            foreach (var copyObject in arg2.Distinct())
+            {
+                GenerateCopier(arg1, copyObject);
+            }
         }
 
         private bool CouldBeCopierAsync(SyntaxNode syntaxNode, CancellationToken cancellationToken)
@@ -161,6 +169,7 @@ namespace Copier
             return potentialCopy;
         }
 
+
         private void GenerateCopier(SourceProductionContext context, CopyObject copyObject)
         {
             if (_referenceProperties.Contains(copyObject.Constraint.Name) && _referenceProperties.Contains(copyObject.Arguments[0].Name))
@@ -181,7 +190,7 @@ namespace Copier
             sourceText.AppendLine(GenerateMethod(copyMethod));
             sourceText.Append(closeText);
 
-            context.AddSource($"{copyObject.Constraint.Name}.g.cs", sourceText.ToString());
+            context.AddSource($"{copyObject.Constraint.Name}_{copyObject.Arguments[0]}.g.cs", sourceText.ToString());
         }
 
         private CopyMethod ParseGenerics(SourceProductionContext context, CopyObject copyObject)
@@ -228,11 +237,8 @@ namespace Copier
                     var propertyCopyObject = new CopyObject();
                     propertyCopyObject.Constraint = property.Type;
                     propertyCopyObject.Arguments[0] = property.Type;
-                    if (!_referenceProperties.Contains(property.Type.Name))
-                    {
-                        GenerateCopier(context, propertyCopyObject);
-                    }
-                    copyMethod.ReferencePropertyNames.Add((property.Name,property.Type.Name));
+                    GenerateCopier(context, propertyCopyObject);
+                    copyMethod.ReferencePropertyNames.Add((property.Name, property.Type.Name));
                 }
                 else if (property.Type.IsValueType)
                 {
@@ -271,11 +277,13 @@ namespace Copier
 
         private static string GetCopyNewMethod(CopyMethod copyMethod)
         {
-            return $@"        public static {copyMethod.Constraint} {_methodName}<TConstraint>({copyMethod.SourceType} source) where TConstraint : {copyMethod.Constraint}, new()
+            var containsSelfReference = ContainsSelfRefernce(copyMethod);
+            return $@"        public static {copyMethod.Constraint} {_methodName}<TConstraint>({copyMethod.SourceType} source{(containsSelfReference ? ", int copyDepth = 10" : "")}) where TConstraint : {copyMethod.Constraint}, new()
         {{
             var target = new {copyMethod.Constraint}();
             {GetPropertyMappings(copyMethod)}
             {GetReferencePropertyMappings(copyMethod)}
+            {(containsSelfReference ? GetSelfReferencePropertyMappings(copyMethod) : "")}
             return target;
         }}";
         }
@@ -287,7 +295,17 @@ namespace Copier
 
         private static string GetReferencePropertyMappings(CopyMethod copyMethod)
         {
-            return string.Join($"{Environment.NewLine}            ", copyMethod.ReferencePropertyNames.Select(p => $"target.{p.propertyName} = {_className}.{_methodName}<{p.type}>(source.{p.propertyName});"));
+            return string.Join($"{Environment.NewLine}            ", copyMethod.ReferencePropertyNames.Where(r => r.type != copyMethod.SourceType).Select(p => $"if (!ReferenceEquals(source.{p.propertyName}, null)) target.{p.propertyName} = {_className}.{_methodName}<{p.type}>(source.{p.propertyName});"));
+        }
+
+        private static string GetSelfReferencePropertyMappings(CopyMethod copyMethod)
+        {
+            return string.Join($"{Environment.NewLine}            ", copyMethod.ReferencePropertyNames.Where(r => r.type == copyMethod.SourceType).Select(p => $"if (!ReferenceEquals(source.{p.propertyName}, null) && copyDepth > 0) target.{p.propertyName} = {_className}.{_methodName}<{p.type}>(source.{p.propertyName}, copyDepth - 1);"));
+        }
+
+        private static bool ContainsSelfRefernce(CopyMethod copyMethod)
+        {
+            return copyMethod.ReferencePropertyNames.Any(r => r.type == copyMethod.SourceType);
         }
     }
 
@@ -301,7 +319,7 @@ namespace Copier
     {
         public CopyType Type { get; set; } = CopyType.New;
         public List<string> PropertyNames { get; set; } = new();
-        public List<(string propertyName,string type)> ReferencePropertyNames { get; set; } = new();
+        public List<(string propertyName, string type)> ReferencePropertyNames { get; set; } = new();
         public string SourceType { get; set; } = "";
         public string Constraint { get; set; } = "";
 
