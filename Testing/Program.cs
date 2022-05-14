@@ -12,11 +12,7 @@ public class Pikachu
     public string Name { get; set; }
     public bool boolean { get; set; }
     public uint UniversalInt { get; set; }
-
-    public void test (HashSet<int> visited = null)
-    {
-
-    }
+    public Pikachu Friend { get; set; }
 }
 
 public class Rabit : IJumpable

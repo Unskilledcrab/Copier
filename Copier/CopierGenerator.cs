@@ -271,17 +271,20 @@ namespace Copier
         {
             return $@"        public static void {_methodName}<TConstraint>({copyMethod.Constraint} source, {copyMethod.Constraint} target) where TConstraint : {copyMethod.Constraint}
         {{
-            {GetPropertyMappings(copyMethod)}{GetReferencePropertyMappings(copyMethod)}
+            {GetPropertyMappings(copyMethod)}
+            {GetCopyReferencePropertyMappings(copyMethod)}
         }}";
         }
 
         private static string GetCopyNewMethod(CopyMethod copyMethod)
         {
-            return $@"        public static {copyMethod.Constraint} {_methodName}<TConstraint>({copyMethod.SourceType} source) where TConstraint : {copyMethod.Constraint}, new()
+            return $@"        public static {copyMethod.Constraint} {_methodName}<TConstraint>({copyMethod.SourceType} source, HashSet<object> visitedPointers = null) where TConstraint : {copyMethod.Constraint}, new()
         {{
             if (source == null) return source;
+            if (visitedPointers == null) visitedPointers = new HashSet<object>();
             var target = new {copyMethod.Constraint}();
-            {GetPropertyMappings(copyMethod)}{GetReferencePropertyMappings(copyMethod)}{GetSelfReferencePropertyMappings(copyMethod)}
+            {GetPropertyMappings(copyMethod)}
+            {GetReferencePropertyMappings(copyMethod)}
             return target;
         }}";
         }
@@ -291,14 +294,14 @@ namespace Copier
             return string.Join($"{Environment.NewLine}            ", copyMethod.ValuePropertyNames.Select(p => $"target.{p} = source.{p};"));
         }
 
-        private static string GetReferencePropertyMappings(CopyMethod copyMethod)
+        private static string GetCopyReferencePropertyMappings(CopyMethod copyMethod)
         {
-            return string.Join($"{Environment.NewLine}            ", copyMethod.ReferencePropertyNames.Where(r => r.type != copyMethod.SourceType).Select(p => $"if (!ReferenceEquals(source.{p.propertyName}, null)) target.{p.propertyName} = {_className}.{_methodName}<{p.type}>(source.{p.propertyName});"));
+            return string.Join($"{Environment.NewLine}            ", copyMethod.ReferencePropertyNames.Select(p => $"if (!ReferenceEquals(source.{p.propertyName}, null)) target.{p.propertyName} = {_className}.{_methodName}<{p.type}>(source.{p.propertyName});"));
         }
 
-        private static string GetSelfReferencePropertyMappings(CopyMethod copyMethod)
+        private static string GetReferencePropertyMappings(CopyMethod copyMethod)
         {
-            return string.Join($"{Environment.NewLine}            ", copyMethod.ReferencePropertyNames.Where(r => r.type == copyMethod.SourceType).Select(p => $"if (!ReferenceEquals(source.{p.propertyName}, null) && !ReferenceEquals(source.{p.propertyName}, source)) {{ target.{p.propertyName} = {_className}.{_methodName}<{p.type}>(source.{p.propertyName}); }} else {{ target.{p.propertyName} = source.{p.propertyName}; }}"));
+            return string.Join($"{Environment.NewLine}            ", copyMethod.ReferencePropertyNames.Select(p => $"if (!ReferenceEquals(source.{p.propertyName}, null) && !visitedPointers.Contains(source.{p.propertyName})) {{ visitedPointers.Add(source.{p.propertyName}); target.{p.propertyName} = {_className}.{_methodName}<{p.type}>(source.{p.propertyName}, visitedPointers); }} else {{ target.{p.propertyName} = source.{p.propertyName}; }}"));
         }
     }
 
