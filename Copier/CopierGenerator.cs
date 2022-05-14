@@ -37,12 +37,15 @@ namespace Copier
 }}
 ";
 
+        private HashSet<string> _referenceProperties = new HashSet<string>();
+
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
             var copierTypes = context.SyntaxProvider
                         .CreateSyntaxProvider(CouldBeCopierAsync, GetCopierTypeOrNull)
                         .Where(type => type is not null)
-                        .Collect();
+                        .Collect()
+                        .SelectMany((x, _) => x.Distinct());
 
             context.RegisterSourceOutput(copierTypes, GenerateCopier);
         }
@@ -105,8 +108,8 @@ namespace Copier
                 // We are mapping to another type
                 var genericArgumentSyntax = genericNameSyntax.DescendantNodes().OfType<TypeArgumentListSyntax>().First().Arguments[0];
 
-                var typeInfo = context.SemanticModel.GetTypeInfo(genericArgumentSyntax, cancellationToken);
-                if (typeInfo.Type is null || !typeInfo.Type.IsType)
+                var typeInfo = context.SemanticModel.GetTypeInfo(genericArgumentSyntax, cancellationToken).Type;
+                if (typeInfo is null || !typeInfo.IsType)
                 {
                     return null;
                 }
@@ -117,26 +120,37 @@ namespace Copier
             var argumentListSyntax = expressionSyntax.ArgumentList.Arguments;
 
 
-            potentialCopy.Arguments[0] = context.SemanticModel.GetTypeInfo(argumentListSyntax[0].ChildNodes().First(), cancellationToken);
-            if (potentialCopy.Arguments[0].GetValueOrDefault().Type is null || !potentialCopy.Arguments[0].GetValueOrDefault().Type.IsType)
+            var isMapping = false;
+            potentialCopy.Arguments[0] = context.SemanticModel.GetTypeInfo(argumentListSyntax[0].ChildNodes().First(), cancellationToken).Type;
+            var firstArgumentType = potentialCopy.Arguments[0];
+            if (firstArgumentType is null || !firstArgumentType.IsType)
             {
                 return null;
             }
             if (argumentListSyntax.Count > 1)
             {
                 // We are mapping two objects, if count is only 1 then we are mapping a new object
-                potentialCopy.Arguments[1] = context.SemanticModel.GetTypeInfo(argumentListSyntax[1].ChildNodes().First(), cancellationToken);
-                if (potentialCopy.Arguments[1].GetValueOrDefault().Type is null || !potentialCopy.Arguments[1].GetValueOrDefault().Type.IsType)
+                potentialCopy.Arguments[1] = context.SemanticModel.GetTypeInfo(argumentListSyntax[1].ChildNodes().First(), cancellationToken).Type;
+                var secondArgumentType = potentialCopy.Arguments[1];
+                if (secondArgumentType is null || !secondArgumentType.IsType)
                 {
                     return null;
+                }
+                else
+                {
+                    isMapping = true;
                 }
             }
 
             // TODO: Check to make sure that the argument(s) implement the generic
             // TODO: If there are two generics, we need to make sure that the second generic implements new() and inherits from the first
-            //if (potentialCopy.Arguments[0])
+            //if (isMapping)
             //{
-
+            // If we are mapping, make sure the that both arguments implement the Constraint
+            //}
+            //else
+            //{
+            // If we are creating new, make sure the TConstaint implements new() and that the first arguement implements the constraint
             //}
 
             //if (potentialCopy.Arguments[1] is not null)
@@ -147,38 +161,27 @@ namespace Copier
             return potentialCopy;
         }
 
-        private void GenerateCopier(SourceProductionContext context, ImmutableArray<CopyObject?> copyObjects)
+        private void GenerateCopier(SourceProductionContext context, CopyObject copyObject)
         {
-            // Make sure that we are only making a single method even if there are multiple calls
-            var distinctCopyObjects = copyObjects.Distinct();
-
-            // Parse all of the constraints to get all of the properties to copy
-            var copyMethods = new List<CopyMethod>();
-            foreach (var copyObject in distinctCopyObjects)
+            if (_referenceProperties.Contains(copyObject.Constraint.Name) && _referenceProperties.Contains(copyObject.Arguments[0].Name))
             {
-                var copyMethod = new CopyMethod();
-                ParseGenerics(copyObject, copyMethod);
-                copyMethods.Add(copyMethod);
+                return;
             }
+
+            var copyMethod = ParseGenerics(context, copyObject);
 
             // Generate the source text for each method
             var sourceText = new StringBuilder();
             sourceText.AppendLine(openText);
-            foreach (var copyMethod in copyMethods)
-            {
-                sourceText.AppendLine(GenerateMethod(copyMethod));
-            }
+            sourceText.AppendLine(GenerateMethod(copyMethod));
             sourceText.Append(closeText);
 
-            context.AddSource($"{_className}.g.cs", sourceText.ToString());
+            context.AddSource($"{copyObject.Constraint.Name}.g.cs", sourceText.ToString());
         }
 
-        private static void ParseGenerics(CopyObject? copyObject, CopyMethod copyMethod)
+        private CopyMethod ParseGenerics(SourceProductionContext context, CopyObject copyObject)
         {
-            if (copyObject is null)
-            {
-                return;
-            }
+            var copyMethod = new CopyMethod();
 
             if (copyObject.Arguments[1] is not null)
             {
@@ -190,8 +193,8 @@ namespace Copier
             }
 
             // Get the first generic argument
-            var constraintType = copyObject.Constraint.Type;
-            var sourceType = copyObject.Arguments[0].GetValueOrDefault().Type;
+            var constraintType = copyObject.Constraint;
+            var sourceType = copyObject.Arguments[0];
 
             if (constraintType is null)
             {
@@ -214,8 +217,21 @@ namespace Copier
                                                                     && p.GetMethod is not null
                                                                     && p.DeclaredAccessibility == Accessibility.Public))
             {
-                copyMethod.PropertyNames.Add(property.Name);
+                if (property.Type.IsReferenceType)
+                {
+                    var propertyCopyObject = new CopyObject();
+                    propertyCopyObject.Constraint = property.Type;
+                    propertyCopyObject.Arguments[0] = property.Type;
+                    GenerateCopier(context, propertyCopyObject);
+                    _referenceProperties.Add(property.Name);
+                    copyMethod.ReferencePropertyNames.Add((property.Name,property.Type.Name));
+                }
+                else if (property.Type.IsValueType)
+                {
+                    copyMethod.PropertyNames.Add(property.Name);
+                }
             }
+            return copyMethod;
         }
 
         private static string GenerateMethod(CopyMethod copyMethod)
@@ -241,6 +257,7 @@ namespace Copier
             return $@"        public static void {_methodName}<TConstraint>({copyMethod.Constraint} source, {copyMethod.Constraint} target) where TConstraint : {copyMethod.Constraint}
         {{
             {GetPropertyMappings(copyMethod)}
+            {GetReferencePropertyMappings(copyMethod)}
         }}";
         }
 
@@ -250,6 +267,7 @@ namespace Copier
         {{
             var target = new {copyMethod.Constraint}();
             {GetPropertyMappings(copyMethod)}
+            {GetReferencePropertyMappings(copyMethod)}
             return target;
         }}";
         }
@@ -257,6 +275,11 @@ namespace Copier
         private static string GetPropertyMappings(CopyMethod copyMethod)
         {
             return string.Join($"{Environment.NewLine}            ", copyMethod.PropertyNames.Select(p => $"target.{p} = source.{p};"));
+        }
+
+        private static string GetReferencePropertyMappings(CopyMethod copyMethod)
+        {
+            return string.Join($"{Environment.NewLine}            ", copyMethod.ReferencePropertyNames.Select(p => $"target.{p.propertyName} = {_className}.{_methodName}<{p.type}>(source.{p.propertyName});"));
         }
     }
 
@@ -270,6 +293,7 @@ namespace Copier
     {
         public CopyType Type { get; set; } = CopyType.New;
         public List<string> PropertyNames { get; set; } = new();
+        public List<(string propertyName,string type)> ReferencePropertyNames { get; set; } = new();
         public string SourceType { get; set; } = "";
         public string Constraint { get; set; } = "";
 
@@ -277,29 +301,29 @@ namespace Copier
 
     public sealed class CopyObject : IEquatable<CopyObject>
     {
-        public TypeInfo Constraint { get; set; }
-        public TypeInfo?[] Arguments { get; set; } = new TypeInfo?[2];
-        
+        public ITypeSymbol Constraint { get; set; }
+        public ITypeSymbol?[] Arguments { get; set; } = new ITypeSymbol?[2];
+
         public bool Equals(CopyObject other)
         {
             //Check whether the compared object is null.
-            if (Object.ReferenceEquals(other, null)) return false;
+            if (ReferenceEquals(other, null)) return false;
 
             //Check whether the compared object references the same data.
-            if (Object.ReferenceEquals(this, other)) return true;
+            if (ReferenceEquals(this, other)) return true;
 
             //Check whether the CopyObject properties are equal.
             return
-                string.Equals(Constraint.Type?.Name, other.Constraint.Type?.Name) &&
-                string.Equals(Arguments[0].GetValueOrDefault().Type?.Name, other.Arguments[0].GetValueOrDefault().Type?.Name) &&
-                string.Equals(Arguments[1].GetValueOrDefault().Type?.Name, other.Arguments[1].GetValueOrDefault().Type?.Name);
+                string.Equals(Constraint?.Name, other.Constraint?.Name) &&
+                string.Equals(Arguments[0]?.Name, other.Arguments[0]?.Name) &&
+                string.Equals(Arguments[1]?.Name, other.Arguments[1]?.Name);
         }
 
         public override int GetHashCode()
         {
-            var constraint = Constraint.Type?.Name?.GetHashCode() ?? 0;
-            var arg1 = Arguments[0].GetValueOrDefault().Type?.Name.GetHashCode() ?? 0;
-            var arg2 = Arguments[1].GetValueOrDefault().Type?.Name.GetHashCode() ?? 0;
+            var constraint = Constraint?.Name?.GetHashCode() ?? 0;
+            var arg1 = Arguments[0]?.Name.GetHashCode() ?? 0;
+            var arg2 = Arguments[1]?.Name.GetHashCode() ?? 0;
             return constraint ^ arg1 ^ arg2;
         }
     }
