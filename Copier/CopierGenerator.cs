@@ -304,7 +304,7 @@ namespace Copier
                 "if (visitedPointers == null) visitedPointers = new HashSet<object>();",
                 $"var target = new {copyMethod.Constraint}();",
                 GetPropertyMappings(copyMethod),
-                GetCopyReferencePropertyMappings(copyMethod),
+                GetReferencePropertyMappings(copyMethod),
                 "return target;"
             );
         }
