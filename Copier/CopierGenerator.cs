@@ -163,14 +163,14 @@ namespace Copier
 
         private void GenerateCopier(SourceProductionContext context, CopyObject copyObject)
         {
-            if (copyObject.Constraint.Name == copyObject.Arguments[0].Name && copyObject.Arguments[1] is null)
-            {
-                _referenceProperties.Add(copyObject.Constraint.Name);
-            }
-
             if (_referenceProperties.Contains(copyObject.Constraint.Name) && _referenceProperties.Contains(copyObject.Arguments[0].Name))
             {
                 return;
+            }
+
+            if (copyObject.Constraint.Name == copyObject.Arguments[0].Name && copyObject.Arguments[1] is null)
+            {
+                _referenceProperties.Add(copyObject.Constraint.Name);
             }
 
             var copyMethod = ParseGenerics(context, copyObject);
@@ -228,7 +228,10 @@ namespace Copier
                     var propertyCopyObject = new CopyObject();
                     propertyCopyObject.Constraint = property.Type;
                     propertyCopyObject.Arguments[0] = property.Type;
-                    GenerateCopier(context, propertyCopyObject);
+                    if (!_referenceProperties.Contains(property.Type.Name))
+                    {
+                        GenerateCopier(context, propertyCopyObject);
+                    }
                     copyMethod.ReferencePropertyNames.Add((property.Name,property.Type.Name));
                 }
                 else if (property.Type.IsValueType)
