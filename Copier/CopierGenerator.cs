@@ -166,6 +166,9 @@ namespace Copier
 
             //}
 
+            if (potentialCopy.CopyType == CopyType.New)
+                potentialCopy.Arguments[0] = potentialCopy.Constraint;
+
             return potentialCopy;
         }
 
@@ -190,21 +193,14 @@ namespace Copier
             sourceText.AppendLine(GenerateMethod(copyMethod));
             sourceText.Append(closeText);
 
-            context.AddSource($"{copyObject.Constraint.Name}_{copyObject.Arguments[0]}.g.cs", sourceText.ToString());
+            var copyParameters = copyObject.CopyType == CopyType.New ? copyObject.Constraint.Name : $"{copyObject.Constraint.Name}_{copyObject.Arguments[0]}_{copyObject.Arguments[1]}";
+            context.AddSource($"{copyObject.CopyType}_{copyParameters}.g.cs", sourceText.ToString());
         }
 
         private CopyMethod ParseGenerics(SourceProductionContext context, CopyObject copyObject)
         {
             var copyMethod = new CopyMethod();
-
-            if (copyObject.Arguments[1] is not null)
-            {
-                copyMethod.Type = CopyType.CopyOver; // generate a method to copy properties to this argument
-            }
-            else
-            {
-                copyMethod.Type = CopyType.New; // We only have one argument so make a new copy of that type
-            }
+            copyMethod.Type = copyObject.CopyType;
 
             // Get the first generic argument
             var constraintType = copyObject.Constraint;
@@ -271,8 +267,7 @@ namespace Copier
         {
             return $@"        public static void {_methodName}<TConstraint>({copyMethod.Constraint} source, {copyMethod.Constraint} target) where TConstraint : {copyMethod.Constraint}
         {{
-            {GetPropertyMappings(copyMethod)}
-            {GetCopyReferencePropertyMappings(copyMethod)}
+            {GenerateCopyOverBody(copyMethod)}
         }}";
         }
 
@@ -280,13 +275,28 @@ namespace Copier
         {
             return $@"        public static {copyMethod.Constraint} {_methodName}<TConstraint>({copyMethod.SourceType} source, HashSet<object> visitedPointers = null) where TConstraint : {copyMethod.Constraint}, new()
         {{
-            if (source == null) return source;
-            if (visitedPointers == null) visitedPointers = new HashSet<object>();
-            var target = new {copyMethod.Constraint}();
-            {GetPropertyMappings(copyMethod)}
-            {GetReferencePropertyMappings(copyMethod)}
-            return target;
+            {GenerateCopyNewBody(copyMethod)}
         }}";
+        }
+
+        private static string GenerateCopyOverBody(CopyMethod copyMethod)
+        {
+            return string.Join($"{Environment.NewLine}            ", 
+                GetPropertyMappings(copyMethod), 
+                GetCopyReferencePropertyMappings(copyMethod)
+            );
+        }
+
+        private static string GenerateCopyNewBody(CopyMethod copyMethod)
+        {
+            return string.Join($"{Environment.NewLine}            ",
+                "if (source == null) return source;",
+                "if (visitedPointers == null) visitedPointers = new HashSet<object>();",
+                $"var target = new {copyMethod.Constraint}();",
+                GetPropertyMappings(copyMethod), 
+                GetCopyReferencePropertyMappings(copyMethod),
+                "return target;"
+            );
         }
 
         private static string GetPropertyMappings(CopyMethod copyMethod)
@@ -325,6 +335,7 @@ namespace Copier
     {
         public ITypeSymbol Constraint { get; set; }
         public ITypeSymbol?[] Arguments { get; set; } = new ITypeSymbol?[2];
+        public CopyType CopyType => Arguments[1] is null ? CopyType.New : CopyType.CopyOver;
 
         public bool Equals(CopyObject other)
         {

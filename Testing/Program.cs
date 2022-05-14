@@ -3,16 +3,34 @@ var test2 = new Kangaroo { JumpHeight = 2 };
 
 Copier.Copy<IRunnable>(test1, test2);
 Copier.Copy<IRunnable>(test1, test2);
+Copier.Copy<IJumpable>(new Pikachu(), new Charizard());
+Copier.Copy<Pokemon>(new Pikachu(), new Charizard());
 Copier.Copy<Kangaroo>(test2);
+Copier.Copy<BillyGoat>(test1);
 
-Copier.Copy<Pikachu>(new Pikachu());
+var pika = Copier.Copy<Pokemon>(new Pikachu());
+var pika2 = Copier.Copy<Pikachu>(new Pikachu());
+var pika3 = Copier.Copy<Charizard>(new Pikachu());
 
-public class Pikachu
+Console.ReadLine();
+
+public class Pikachu : Pokemon, IJumpable
 {
     public string Name { get; set; }
-    public bool boolean { get; set; }
-    public uint UniversalInt { get; set; }
+    public int JumpHeight { get; set; }
     public Pikachu Friend { get; set; }
+}
+
+public class Charizard : Pokemon, IJumpable
+{
+    public string Name { get; set; }
+    public int JumpHeight { get; set; }
+    public Pikachu Friend { get; set; }
+}
+
+public class Pokemon
+{
+    public int Index { get; set; }
 }
 
 public class Rabit : IJumpable
@@ -21,7 +39,6 @@ public class Rabit : IJumpable
     public int RunSpeed { get; set; }
     public int ThumpSound { get; set; }
     public int ThumpSounds { get; set; }
-    public int test { get; set; }
     public Food food { get; set; }
     public Rabit Friend { get; set; }
     private int _boom { get; } = 0;
@@ -29,12 +46,12 @@ public class Rabit : IJumpable
 
 public class Food
 {
-    public int test { get; set; }
+    public int Calories { get; set; }
     public Vitamins VitaminB { get; set; }
 }
 public class Vitamins
 {
-    public int test { get; set; }
+    public int AmountOfNutrients { get; set; }
 }
 
 
