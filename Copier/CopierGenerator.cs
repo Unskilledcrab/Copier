@@ -163,6 +163,11 @@ namespace Copier
 
         private void GenerateCopier(SourceProductionContext context, CopyObject copyObject)
         {
+            if (copyObject.Constraint.Name == copyObject.Arguments[0].Name && copyObject.Arguments[1] is null)
+            {
+                _referenceProperties.Add(copyObject.Constraint.Name);
+            }
+
             if (_referenceProperties.Contains(copyObject.Constraint.Name) && _referenceProperties.Contains(copyObject.Arguments[0].Name))
             {
                 return;
@@ -219,11 +224,11 @@ namespace Copier
             {
                 if (property.Type.IsReferenceType)
                 {
+                    // Recursively call generate copier so that the reference is added
                     var propertyCopyObject = new CopyObject();
                     propertyCopyObject.Constraint = property.Type;
                     propertyCopyObject.Arguments[0] = property.Type;
                     GenerateCopier(context, propertyCopyObject);
-                    _referenceProperties.Add(property.Name);
                     copyMethod.ReferencePropertyNames.Add((property.Name,property.Type.Name));
                 }
                 else if (property.Type.IsValueType)
