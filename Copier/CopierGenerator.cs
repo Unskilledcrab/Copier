@@ -37,7 +37,8 @@ namespace Copier
 }}
 ";
 
-        private HashSet<string> _referenceProperties = new HashSet<string>();
+        private HashSet<string> _copyNew = new HashSet<string>();
+        private HashSet<string> _copyOver = new HashSet<string>();
 
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
@@ -51,7 +52,8 @@ namespace Copier
 
         private void GenerateCopier(SourceProductionContext arg1, ImmutableArray<CopyObject> arg2)
         {
-            _referenceProperties.Clear();
+            _copyOver.Clear();
+            _copyNew.Clear();
             foreach (var copyObject in arg2.Distinct())
             {
                 GenerateCopier(arg1, copyObject);
@@ -175,14 +177,23 @@ namespace Copier
 
         private void GenerateCopier(SourceProductionContext context, CopyObject copyObject)
         {
-            if (_referenceProperties.Contains(copyObject.Constraint.Name) && _referenceProperties.Contains(copyObject.Arguments[0].Name))
+            if (copyObject.CopyType == CopyType.New)
             {
-                return;
-            }
+                if (_copyNew.Contains(copyObject.Constraint.Name))
+                {
+                    return;
+                }
 
-            if (copyObject.Constraint.Name == copyObject.Arguments[0].Name && copyObject.Arguments[1] is null)
+                _copyNew.Add(copyObject.Constraint.Name);
+            }
+            else
             {
-                _referenceProperties.Add(copyObject.Constraint.Name);
+                if (_copyOver.Contains(copyObject.Constraint.Name))
+                {
+                    return;
+                }
+
+                _copyOver.Add(copyObject.Constraint.Name);
             }
 
             var copyMethod = ParseGenerics(context, copyObject);
@@ -193,8 +204,7 @@ namespace Copier
             sourceText.AppendLine(GenerateMethod(copyMethod));
             sourceText.Append(closeText);
 
-            var copyParameters = copyObject.CopyType == CopyType.New ? copyObject.Constraint.Name : $"{copyObject.Constraint.Name}_{copyObject.Arguments[0]}_{copyObject.Arguments[1]}";
-            context.AddSource($"{copyObject.CopyType}_{copyParameters}.g.cs", sourceText.ToString());
+            context.AddSource($"{copyObject.CopyType}_{copyObject.Constraint.Name}.g.cs", sourceText.ToString());
         }
 
         private CopyMethod ParseGenerics(SourceProductionContext context, CopyObject copyObject)
@@ -281,8 +291,8 @@ namespace Copier
 
         private static string GenerateCopyOverBody(CopyMethod copyMethod)
         {
-            return string.Join($"{Environment.NewLine}            ", 
-                GetPropertyMappings(copyMethod), 
+            return string.Join($"{Environment.NewLine}            ",
+                GetPropertyMappings(copyMethod),
                 GetCopyReferencePropertyMappings(copyMethod)
             );
         }
@@ -293,7 +303,7 @@ namespace Copier
                 "if (source == null) return source;",
                 "if (visitedPointers == null) visitedPointers = new HashSet<object>();",
                 $"var target = new {copyMethod.Constraint}();",
-                GetPropertyMappings(copyMethod), 
+                GetPropertyMappings(copyMethod),
                 GetCopyReferencePropertyMappings(copyMethod),
                 "return target;"
             );

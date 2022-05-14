@@ -2,7 +2,7 @@
 var test2 = new Kangaroo { JumpHeight = 2 };
 
 Copier.Copy<IRunnable>(test1, test2);
-Copier.Copy<IRunnable>(test1, test2);
+Copier.Copy<IRunnable>(test2, test1);
 Copier.Copy<IJumpable>(new Pikachu(), new Charizard());
 Copier.Copy<Pokemon>(new Pikachu(), new Charizard());
 Copier.Copy<Kangaroo>(test2);
