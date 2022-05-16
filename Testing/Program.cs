@@ -1,118 +1,66 @@
-﻿var test1 = new BillyGoat { RunSpeed = 10 };
-var test2 = new Kangaroo { JumpHeight = 2 };
+﻿var pikachu = new Pikachu() 
+{ 
+    Name = "pika pika", 
+    PokaIndex = 1, 
+    Speed = 1000
+};
+pikachu.PikaPal = pikachu; // So lonely :(
 
-Copier.Copy<IRunnable>(test1, test2);
-Copier.Copy<IRunnable>(test1, test2);
-Copier.Copy<IRunnable>(test2, test1);
-Copier.Copy<IJumpable>(new Pikachu(), new Charizard());
-Copier.Copy<Pokemon>(new Pikachu(), new Charizard());
-Copier.Copy<Kangaroo>(test2);
-Copier.Copy<BillyGoat>(test1);
+var charizard = new Charizard() 
+{ 
+    Name = "Destroyer", 
+    PokaIndex = 2, 
+    Friend = pikachu, 
+    JumpHeight = 2 
+};
 
-var pikachu = new Pikachu();
-pikachu.Friend = pikachu;
 
-var pika = Copier.Copy<Pokemon>(new Pikachu());
-var pika1 = Copier.Copy<Pikachu>(pikachu);
-var pika2 = Copier.Copy<Pikachu>(new Pikachu());
-var pika3 = Copier.Copy<Charizard>(new Pikachu());
+Console.WriteLine(charizard);
+Console.WriteLine(pikachu);
+Copier.Copy<IPokemon>(pikachu, charizard);
+Console.WriteLine(charizard);
+Console.WriteLine(pikachu);
+
+Console.WriteLine(Copier.Copy<Pokemon>(pikachu));
 
 Console.ReadLine();
 
-public class Pikachu : Pokemon, IJumpable
+public class Pikachu : Pokemon
 {
-    public string Name { get; set; }
-    public int JumpHeight { get; set; }
-    public Pikachu Friend { get; set; }
-}
-
-public class Charizard : Pokemon, IJumpable
-{
-    public string Name { get; set; }
-    public int JumpHeight { get; set; }
-    public Pikachu Friend { get; set; }
-}
-
-public class Pokemon
-{
-    public int Index { get; set; }
-}
-
-public class Rabit : IJumpable
-{
-    public int JumpHeight { get; set; }
-    public int RunSpeed { get; set; }
-    public int ThumpSound { get; set; }
-    public int ThumpSounds { get; set; }
-    public Food food { get; set; }
-    public Rabit Friend { get; set; }
-    private int _boom { get; } = 0;
-}
-
-public class Food
-{
-    public int Calories { get; set; }
-    public Vitamins VitaminB { get; set; }
-}
-public class Vitamins
-{
-    public int AmountOfNutrients { get; set; }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-public class BillyGoat : IRunnable
-{
-    public int RunSpeed { get; set; }
-    public Rabit Rabit { get; set; }
-    public int AnotherProperty { get; set; }
-}
-
-
-public class Kangaroo : IJumpable, IRunnable
-{
-    public int JumpHeight { get; set; }
-    public int RunSpeed { get; set; }
-    public int PouchDimensions { get; set; }
-    public Rabit Rabit { get; set; }
-    int _thinkPower = 0;
-
-    public void test()
+    public int Speed { get; set; }
+    public Pikachu PikaPal { get; set; }
+    public void ScratchAttack()
     {
-
+        // I Attack you
+    }
+    public override string ToString()
+    {
+        return $"{base.ToString()} | Pikachu is friends with {PikaPal.Name}";
     }
 }
 
-public interface IJumpable
+public class Charizard : Pokemon
 {
     public int JumpHeight { get; set; }
+    public Pikachu Friend { get; set; }
+    public override string ToString()
+    {
+        return $"{base.ToString()} | Charizard is friends with {Friend.Name}";
+    }
 }
 
-public interface IRunnable
+public class Pokemon : IPokemon
 {
-    public int RunSpeed { get; set; }
-    public Rabit Rabit { get; set; }
+    public int PokaIndex { get; set; }
+    public string Name { get; set; }
+    public override string ToString()
+    {
+        return $"{PokaIndex}: {Name}";
+    }
 }
 
-public interface ITester
+public interface IPokemon
 {
-    public int Stuff { get; set; }
-    public int MoreStuff { get; set; }
+    public int PokaIndex { get; set; }
+    public string Name { get; set; }
 }

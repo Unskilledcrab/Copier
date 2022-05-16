@@ -129,8 +129,6 @@ namespace Copier
             // Gather all the argument types used
             var argumentListSyntax = expressionSyntax.ArgumentList.Arguments;
 
-
-            var isMapping = false;
             potentialCopy.Arguments[0] = context.SemanticModel.GetTypeInfo(argumentListSyntax[0].ChildNodes().First(), cancellationToken).Type;
             var firstArgumentType = potentialCopy.Arguments[0];
             if (firstArgumentType is null || !firstArgumentType.IsType)
@@ -145,10 +143,6 @@ namespace Copier
                 if (secondArgumentType is null || !secondArgumentType.IsType)
                 {
                     return null;
-                }
-                else
-                {
-                    isMapping = true;
                 }
             }
 
@@ -291,22 +285,33 @@ namespace Copier
 
         private static string GenerateCopyOverBody(CopyMethod copyMethod)
         {
-            return string.Join($"{Environment.NewLine}            ",
-                GetPropertyMappings(copyMethod),
-                GetCopyReferencePropertyMappings(copyMethod)
-            );
+            var body = new List<string>();
+
+            body.Add(GetPropertyMappings(copyMethod));
+            if (copyMethod.ReferencePropertyNames.Any())
+            {
+                body.Add(GetCopyReferencePropertyMappings(copyMethod));
+            }
+
+            return string.Join($"{Environment.NewLine}            ", body);
         }
 
         private static string GenerateCopyNewBody(CopyMethod copyMethod)
         {
-            return string.Join($"{Environment.NewLine}            ",
-                "if (source == null) return source;",
-                "if (visitedPointers == null) visitedPointers = new HashSet<object>();",
-                $"var target = new {copyMethod.Constraint}();",
-                GetPropertyMappings(copyMethod),
-                GetReferencePropertyMappings(copyMethod),
-                "return target;"
-            );
+            var body = new List<string>();
+            var hasReferences = copyMethod.ReferencePropertyNames.Any();
+
+            body.Add("if (source == null) return source;");
+            body.Add($"var target = new {copyMethod.Constraint}();");
+            body.Add(GetPropertyMappings(copyMethod));
+            if (hasReferences)
+            {
+                body.Add("if (visitedPointers == null) visitedPointers = new HashSet<object>();");
+                body.Add(GetReferencePropertyMappings(copyMethod));
+            }
+            body.Add("return target;");
+
+            return string.Join($"{Environment.NewLine}            ", body);
         }
 
         private static string GetPropertyMappings(CopyMethod copyMethod)
